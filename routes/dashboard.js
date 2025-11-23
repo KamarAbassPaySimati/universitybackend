@@ -15,20 +15,29 @@ router.get('/stats', async (req, res) => {
     
     console.log('Dashboard stats - Records count:', recordsCount);
     
-    // Get unique students and departments from studentrecords collection
-    const totalStudents = await db.collection('studentrecords').distinct('registrationNumber');
-    const departments = await db.collection('studentrecords').distinct('courseCode');
-    const departmentsCount = departments.length;
+    // Get counts more efficiently
+    const [totalStudentsCount, departmentsCount, recentRecords] = await Promise.all([
+      db.collection('studentrecords').aggregate([
+        { $group: { _id: '$registrationNumber' } },
+        { $count: 'total' }
+      ]).toArray(),
+      db.collection('studentrecords').aggregate([
+        { $group: { _id: '$courseCode' } },
+        { $count: 'total' }
+      ]).toArray(),
+      db.collection('studentrecords')
+        .find({}, { projection: { studentName: 1, courseName: 1, finalGrade: 1 } })
+        .sort({ _id: -1 })
+        .limit(5)
+        .toArray()
+    ]);
     
-    // Get recent activities (last 5 records)
-    const recentRecords = await db.collection('studentrecords')
-      .find({})
-      .sort({ _id: -1 })
-      .limit(5)
-      .toArray();
+    const totalStudents = totalStudentsCount[0]?.total || 0;
+    const departments = departmentsCount[0]?.total || 0;
     
-    // Get grade distribution based on finalGrade
+    // Get grade distribution with sampling for performance
     const gradeDistribution = await db.collection('studentrecords').aggregate([
+      { $sample: { size: 1000 } }, // Sample for performance
       {
         $addFields: {
           letterGrade: {
@@ -48,8 +57,9 @@ router.get('/stats', async (req, res) => {
       { $sort: { _id: 1 } }
     ]).toArray();
     
-    // Get department stats from studentrecords
+    // Get department stats with sampling
     const departmentStats = await db.collection('studentrecords').aggregate([
+      { $sample: { size: 5000 } }, // Sample for performance
       {
         $group: {
           _id: '$courseCode',
@@ -77,10 +87,10 @@ router.get('/stats', async (req, res) => {
     
     res.json({
       totals: {
-        students: totalStudents.length || Math.floor(recordsCount / 10), // Estimate unique students
-        faculty: facultyCount || Math.max(10, Math.floor(departments.length * 2)), // Estimate faculty
-        courses: departments.length || coursesCount,
-        departments: departmentsCount,
+        students: totalStudents || Math.floor(recordsCount / 10), // Estimate unique students
+        faculty: facultyCount || Math.max(10, Math.floor(departments * 2)), // Estimate faculty
+        courses: departments || coursesCount,
+        departments: departments,
         graduationRate: graduationRate || 85.5 // Default graduation rate
       },
       recentActivities: recentRecords.map(record => ({
