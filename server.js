@@ -8,6 +8,9 @@ require('./config/database'); // Initialize MongoDB connection
 const app = express();
 const PORT = process.env.PORT || 8080;
 
+// Trust proxy for Render deployment
+app.set('trust proxy', 1);
+
 // Security middleware
 app.use(helmet());
 app.use(cors({
@@ -29,10 +32,13 @@ app.use((req, res, next) => {
   }
 });
 
-// Rate limiting
+// Rate limiting with proper proxy configuration
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100 // limit each IP to 100 requests per windowMs
+  max: 100, // limit each IP to 100 requests per windowMs
+  trustProxy: true,
+  standardHeaders: true,
+  legacyHeaders: false
 });
 app.use(limiter);
 
