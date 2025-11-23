@@ -40,14 +40,48 @@ app.use(limiter);
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
 
-// Routes
-app.use('/api/auth', require('./routes/auth'));
-app.use('/api/students', require('./routes/students'));
-app.use('/api/faculty', require('./routes/faculty'));
-app.use('/api/academics', require('./routes/academics'));
-app.use('/api/administration', require('./routes/administration'));
-app.use('/api/dashboard', require('./routes/dashboard'));
-app.use('/api/upload', require('./routes/upload'));
+// Routes with error handling
+try {
+  app.use('/api/auth', require('./routes/auth'));
+} catch (err) {
+  console.log('⚠️ Auth routes not loaded:', err.message);
+}
+
+try {
+  app.use('/api/students', require('./routes/students'));
+} catch (err) {
+  console.log('⚠️ Students routes not loaded:', err.message);
+}
+
+try {
+  app.use('/api/faculty', require('./routes/faculty'));
+} catch (err) {
+  console.log('⚠️ Faculty routes not loaded:', err.message);
+}
+
+try {
+  app.use('/api/academics', require('./routes/academics'));
+} catch (err) {
+  console.log('⚠️ Academics routes not loaded:', err.message);
+}
+
+try {
+  app.use('/api/administration', require('./routes/administration'));
+} catch (err) {
+  console.log('⚠️ Administration routes not loaded:', err.message);
+}
+
+try {
+  app.use('/api/dashboard', require('./routes/dashboard'));
+} catch (err) {
+  console.log('⚠️ Dashboard routes not loaded:', err.message);
+}
+
+try {
+  app.use('/api/upload', require('./routes/upload'));
+} catch (err) {
+  console.log('⚠️ Upload routes not loaded:', err.message);
+}
 
 // Health check
 app.get('/api/health', (req, res) => {
@@ -58,14 +92,27 @@ app.get('/api/health', (req, res) => {
 app.get('/api/test-mongo', async (req, res) => {
   try {
     const mongoose = require('mongoose');
+    
+    if (mongoose.connection.readyState !== 1) {
+      return res.status(500).json({ 
+        error: 'MongoDB not connected', 
+        readyState: mongoose.connection.readyState,
+        states: { 0: 'disconnected', 1: 'connected', 2: 'connecting', 3: 'disconnecting' }
+      });
+    }
+    
     const collections = await mongoose.connection.db.listCollections().toArray();
     res.json({ 
       status: 'MongoDB Connected', 
       collections: collections.map(c => c.name),
-      dbName: mongoose.connection.db.databaseName
+      dbName: mongoose.connection.db.databaseName,
+      readyState: mongoose.connection.readyState
     });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ 
+      error: error.message,
+      stack: error.stack
+    });
   }
 });
 
