@@ -1,59 +1,83 @@
 const express = require('express');
-const pool = require('../config/database');
+const mongoose = require('mongoose');
 const router = express.Router();
 
 // Get dashboard statistics
 router.get('/stats', async (req, res) => {
   try {
-    // Get counts
-    const studentsCount = await pool.query('SELECT COUNT(*) FROM students WHERE status = $1', ['active']);
-    const facultyCount = await pool.query('SELECT COUNT(*) FROM faculty');
-    const coursesCount = await pool.query('SELECT COUNT(*) FROM courses');
-    const departmentsCount = await pool.query('SELECT COUNT(*) FROM departments');
+    const db = mongoose.connection.db;
     
-    // Get recent enrollments
-    const recentEnrollments = await pool.query(`
-      SELECT COUNT(*) as count, DATE(e.created_at) as date
-      FROM enrollments e
-      WHERE e.created_at >= CURRENT_DATE - INTERVAL '30 days'
-      GROUP BY DATE(e.created_at)
-      ORDER BY date DESC
-      LIMIT 7
-    `);
+    // Get collection counts
+    const studentsCount = await db.collection('students').countDocuments({ status: 'active' });
+    const facultyCount = await db.collection('faculty').countDocuments();
+    const coursesCount = await db.collection('courses').countDocuments();
+    const gradesCount = await db.collection('grades').countDocuments();
+    
+    // Get unique departments from grades collection
+    const departments = await db.collection('grades').distinct('courseCode');
+    const departmentsCount = departments.length;
+    
+    // Get recent activities (last 30 days)
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+    
+    const recentGrades = await db.collection('grades')
+      .find({ createdAt: { $gte: thirtyDaysAgo } })
+      .sort({ createdAt: -1 })
+      .limit(5)
+      .toArray();
     
     // Get grade distribution
-    const gradeDistribution = await pool.query(`
-      SELECT letter_grade, COUNT(*) as count
-      FROM grades
-      WHERE letter_grade IS NOT NULL
-      GROUP BY letter_grade
-      ORDER BY letter_grade
-    `);
+    const gradeDistribution = await db.collection('grades').aggregate([
+      { $match: { letterGrade: { $exists: true, $ne: null } } },
+      { $group: { _id: '$letterGrade', count: { $sum: 1 } } },
+      { $sort: { _id: 1 } }
+    ]).toArray();
     
-    // Get department stats
-    const departmentStats = await pool.query(`
-      SELECT d.name, 
-        COUNT(s.id) as student_count,
-        COUNT(f.id) as faculty_count
-      FROM departments d
-      LEFT JOIN students s ON d.id = s.department_id AND s.status = 'active'
-      LEFT JOIN faculty f ON d.id = f.department_id
-      GROUP BY d.id, d.name
-      ORDER BY d.name
-    `);
+    // Get department stats from grades
+    const departmentStats = await db.collection('grades').aggregate([
+      {
+        $group: {
+          _id: '$courseCode',
+          studentCount: { $addToSet: '$registrationNumber' },
+          totalGrades: { $sum: 1 }
+        }
+      },
+      {
+        $project: {
+          name: '$_id',
+          student_count: { $size: '$studentCount' },
+          total_grades: '$totalGrades'
+        }
+      },
+      { $sort: { student_count: -1 } },
+      { $limit: 5 }
+    ]).toArray();
+    
+    // Calculate graduation rate (mock calculation based on available data)
+    const totalStudents = await db.collection('grades').distinct('registrationNumber');
+    const graduationRate = totalStudents.length > 0 ? 
+      Math.round((gradeDistribution.filter(g => ['A', 'B'].includes(g._id)).reduce((sum, g) => sum + g.count, 0) / 
+      gradeDistribution.reduce((sum, g) => sum + g.count, 0)) * 100 * 10) / 10 : 0;
     
     res.json({
       totals: {
-        students: parseInt(studentsCount.rows[0].count),
-        faculty: parseInt(facultyCount.rows[0].count),
-        courses: parseInt(coursesCount.rows[0].count),
-        departments: parseInt(departmentsCount.rows[0].count)
+        students: totalStudents.length || studentsCount,
+        faculty: facultyCount,
+        courses: coursesCount,
+        departments: departmentsCount,
+        graduationRate: graduationRate
       },
-      recentEnrollments: recentEnrollments.rows,
-      gradeDistribution: gradeDistribution.rows,
-      departmentStats: departmentStats.rows
+      recentActivities: recentGrades.map(grade => ({
+        title: `Grade ${grade.letterGrade} assigned to ${grade.studentName}`,
+        time: new Date(grade.createdAt).toLocaleDateString(),
+        type: 'grade'
+      })),
+      gradeDistribution: gradeDistribution.map(g => ({ grade: g._id, count: g.count })),
+      departmentStats: departmentStats
     });
   } catch (error) {
+    console.error('Dashboard stats error:', error);
     res.status(500).json({ error: error.message });
   }
 });
