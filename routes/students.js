@@ -7,8 +7,10 @@ router.get('/', async (req, res) => {
   try {
     const db = mongoose.connection.db;
     
-    // Get unique students from grades collection
-    const students = await db.collection('grades').aggregate([
+    console.log('Fetching students from studentrecords collection...');
+    
+    // Get unique students from studentrecords collection (limit to first 100 for performance)
+    const students = await db.collection('studentrecords').aggregate([
       {
         $group: {
           _id: '$registrationNumber',
@@ -17,27 +19,35 @@ router.get('/', async (req, res) => {
           academicYear: { $first: '$academicYear' },
           semester: { $first: '$semester' },
           yearOfStudy: { $first: '$yearOfStudy' },
-          createdAt: { $first: '$createdAt' },
-          grades: { $push: { course: '$courseCode', grade: '$letterGrade', points: '$gradePoints' } }
+          finalGrade: { $avg: '$finalGrade' },
+          totalCourses: { $sum: 1 },
+          courses: { $push: { course: '$courseCode', grade: '$finalGrade' } }
         }
       },
       {
         $project: {
           student_id: '$_id',
-          full_name: '$studentName',
-          program_name: { $arrayElemAt: [{ $split: ['$courseCode', ' '] }, 0] },
+          full_name: { $trim: { input: '$studentName' } },
+          program_name: { $arrayElemAt: [{ $split: ['$_id', '/'] }, 0] }, // Extract program from registration number
           academic_year: '$academicYear',
           semester: '$semester',
           enrollment_year: '$yearOfStudy',
           status: 'active',
-          email: { $concat: [{ $toLower: { $replaceAll: { input: '$studentName', find: ' ', replacement: '.' } } }, '@university.edu'] },
-          total_courses: { $size: '$grades' },
-          created_at: '$createdAt'
+          email: { 
+            $concat: [
+              { $toLower: { $replaceAll: { input: { $trim: { input: '$studentName' } }, find: ' ', replacement: '.' } } }, 
+              '@university.edu'
+            ] 
+          },
+          total_courses: '$totalCourses',
+          average_grade: { $round: ['$finalGrade', 1] }
         }
       },
-      { $sort: { created_at: -1 } }
+      { $sort: { student_id: 1 } },
+      { $limit: 100 } // Limit for performance
     ]).toArray();
     
+    console.log(`Found ${students.length} unique students`);
     res.json(students);
   } catch (error) {
     console.error('Students fetch error:', error);
