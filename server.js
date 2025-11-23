@@ -88,6 +88,30 @@ app.get('/api/health', (req, res) => {
   res.json({ status: 'OK', message: 'University Management System API' });
 });
 
+// Debug route
+app.get('/api/debug', (req, res) => {
+  const mongoose = require('mongoose');
+  res.json({
+    status: 'Debug Info',
+    nodeEnv: process.env.NODE_ENV,
+    port: process.env.PORT,
+    mongoUri: process.env.MONGODB_URI ? 'Set' : 'Not Set',
+    mongoState: mongoose.connection.readyState,
+    routes: [
+      '/api/health',
+      '/api/debug', 
+      '/api/test-mongo',
+      '/api/auth',
+      '/api/students',
+      '/api/faculty',
+      '/api/academics',
+      '/api/administration',
+      '/api/dashboard',
+      '/api/upload'
+    ]
+  });
+});
+
 // MongoDB test endpoint
 app.get('/api/test-mongo', async (req, res) => {
   try {
