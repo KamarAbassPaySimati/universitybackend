@@ -1,9 +1,10 @@
 const express = require('express');
 const mongoose = require('mongoose');
+const { authenticate, authorize, filterByDepartment } = require('../middleware/auth');
 const router = express.Router();
 
 // Get dashboard statistics
-router.get('/stats', async (req, res) => {
+router.get('/stats', authenticate, filterByDepartment, async (req, res) => {
   try {
     const db = mongoose.connection.db;
     
@@ -108,7 +109,7 @@ router.get('/stats', async (req, res) => {
 });
 
 // Get enrollment trends over time
-router.get('/enrollment-trends', async (req, res) => {
+router.get('/enrollment-trends', authenticate, filterByDepartment, async (req, res) => {
   try {
     const db = mongoose.connection.db;
     
@@ -145,7 +146,7 @@ router.get('/enrollment-trends', async (req, res) => {
 });
 
 // Get historical trends for comparison
-router.get('/trends', async (req, res) => {
+router.get('/trends', authenticate, filterByDepartment, async (req, res) => {
   try {
     const db = mongoose.connection.db;
     

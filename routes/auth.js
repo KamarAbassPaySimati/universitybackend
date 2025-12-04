@@ -1,104 +1,141 @@
 const express = require('express');
-const bcrypt = require('bcryptjs');
-const jwt = require('jsonwebtoken');
-const mongoose = require('mongoose');
+const User = require('../models/User');
+const { generateToken, authenticate } = require('../middleware/auth');
 const router = express.Router();
 
-// Login
+// Login endpoint
 router.post('/login', async (req, res) => {
   try {
     const { username, password } = req.body;
-    const db = mongoose.connection.db;
     
-    // Find user or create default admin user
-    let user = await db.collection('users').findOne({ 
-      username: username, 
-      status: 'active' 
+    if (!username || !password) {
+      return res.status(400).json({ error: 'Username and password required' });
+    }
+
+    const user = await User.findOne({ 
+      $or: [{ username }, { email: username }],
+      isActive: true 
     });
     
-    // If no user found and it's admin, create default admin
-    if (!user && username === 'admin') {
-      const hashedPassword = await bcrypt.hash(password || 'admin123', 10);
-      const defaultAdmin = {
-        username: 'admin',
-        email: 'admin@university.edu',
-        password_hash: hashedPassword,
-        full_name: 'System Administrator',
-        role: 'admin',
-        status: 'active',
-        created_at: new Date()
-      };
-      
-      const result = await db.collection('users').insertOne(defaultAdmin);
-      user = { ...defaultAdmin, _id: result.insertedId };
-    }
-    
-    if (!user) {
+    if (!user || !(await user.comparePassword(password))) {
       return res.status(401).json({ error: 'Invalid credentials' });
     }
-    
-    // Check password
-    const isValidPassword = await bcrypt.compare(password, user.password_hash);
-    if (!isValidPassword) {
-      return res.status(401).json({ error: 'Invalid credentials' });
-    }
-    
-    // Generate JWT
-    const token = jwt.sign(
-      { userId: user._id, role: user.role },
-      process.env.JWT_SECRET || 'university_jwt_secret_2024',
-      { expiresIn: process.env.JWT_EXPIRES_IN || '24h' }
-    );
+
+    user.lastLogin = new Date();
+    await user.save();
+
+    const token = generateToken(user._id);
     
     res.json({
-      token,
+      success: true,
       user: {
         id: user._id,
         username: user.username,
         email: user.email,
-        full_name: user.full_name,
-        role: user.role
-      }
+        role: user.role,
+        department: user.department,
+        organization: user.organization,
+        name: `${user.firstName} ${user.lastName}`
+      },
+      token
     });
   } catch (error) {
-    console.error('Login error:', error);
     res.status(500).json({ error: error.message });
   }
 });
 
-// Verify token
-router.get('/verify', async (req, res) => {
+// Register endpoint
+router.post('/register', async (req, res) => {
   try {
-    const token = req.headers.authorization?.split(' ')[1];
+    const { username, email, password, role, department, organization, firstName, lastName } = req.body;
     
-    if (!token) {
-      return res.status(401).json({ error: 'No token provided' });
+    if (!username || !email || !password || !role || !department || !organization || !firstName || !lastName) {
+      return res.status(400).json({ error: 'All fields are required' });
     }
-    
-    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'university_jwt_secret_2024');
-    const db = mongoose.connection.db;
-    
-    const user = await db.collection('users').findOne({
-      _id: new mongoose.Types.ObjectId(decoded.userId),
-      status: 'active'
+
+    const existingUser = await User.findOne({
+      $or: [{ username }, { email }]
     });
     
-    if (!user) {
-      return res.status(401).json({ error: 'Invalid token' });
+    if (existingUser) {
+      return res.status(400).json({ error: 'Username or email already exists' });
     }
+
+    const user = new User({
+      username, email, password, role, department, organization, firstName, lastName
+    });
     
-    res.json({ 
+    await user.save();
+    
+    res.json({
+      success: true,
+      message: 'User registered successfully',
       user: {
         id: user._id,
         username: user.username,
         email: user.email,
-        full_name: user.full_name,
-        role: user.role
+        role: user.role,
+        department: user.department,
+        organization: user.organization
       }
     });
   } catch (error) {
-    console.error('Token verification error:', error);
-    res.status(401).json({ error: 'Invalid token' });
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get current user
+router.get('/me', authenticate, async (req, res) => {
+  try {
+    res.json({
+      user: {
+        id: req.user._id,
+        username: req.user.username,
+        email: req.user.email,
+        role: req.user.role,
+        department: req.user.department,
+        organization: req.user.organization,
+        name: `${req.user.firstName} ${req.user.lastName}`,
+        permissions: req.user.permissions
+      }
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Create default admin user
+router.post('/create-admin', async (req, res) => {
+  try {
+    const adminExists = await User.findOne({ role: 'super-admin' });
+    
+    if (adminExists) {
+      return res.status(400).json({ error: 'Super admin already exists' });
+    }
+
+    const admin = new User({
+      username: 'superadmin',
+      email: 'admin@university.edu',
+      password: 'admin123',
+      role: 'super-admin',
+      department: 'Administration',
+      organization: 'University System',
+      firstName: 'Super',
+      lastName: 'Administrator'
+    });
+    
+    await admin.save();
+    
+    res.json({
+      success: true,
+      message: 'Super admin created successfully',
+      credentials: {
+        username: 'superadmin',
+        password: 'admin123'
+      }
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
   }
 });
 
