@@ -89,6 +89,15 @@ try {
   console.log('⚠️ Upload routes not loaded:', err.message);
 }
 
+// Root route
+app.get('/', (req, res) => {
+  res.json({ 
+    status: 'University Management System API', 
+    message: 'Backend is running',
+    endpoints: ['/api/health', '/api/debug', '/api/test-mongo']
+  });
+});
+
 // Health check
 app.get('/api/health', (req, res) => {
   res.json({ status: 'OK', message: 'University Management System API' });

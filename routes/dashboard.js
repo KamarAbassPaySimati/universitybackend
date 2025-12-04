@@ -107,4 +107,41 @@ router.get('/stats', async (req, res) => {
   }
 });
 
+// Get enrollment trends over time
+router.get('/enrollment-trends', async (req, res) => {
+  try {
+    const db = mongoose.connection.db;
+    
+    // Get enrollment trends by academic year and semester
+    const enrollmentTrends = await db.collection('studentrecords').aggregate([
+      { $sample: { size: 10000 } }, // Sample for performance
+      {
+        $group: {
+          _id: {
+            year: '$academicYear',
+            semester: '$semester'
+          },
+          studentCount: { $addToSet: '$registrationNumber' },
+          totalEnrollments: { $sum: 1 }
+        }
+      },
+      {
+        $project: {
+          period: { $concat: ['$_id.year', ' S', { $toString: '$_id.semester' }] },
+          year: '$_id.year',
+          semester: '$_id.semester',
+          uniqueStudents: { $size: '$studentCount' },
+          totalEnrollments: '$totalEnrollments'
+        }
+      },
+      { $sort: { year: 1, semester: 1 } }
+    ]).toArray();
+    
+    res.json({ enrollmentTrends });
+  } catch (error) {
+    console.error('Enrollment trends error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 module.exports = router;
