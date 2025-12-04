@@ -89,6 +89,12 @@ try {
   console.log('⚠️ Upload routes not loaded:', err.message);
 }
 
+try {
+  app.use('/api/student-portal', require('./routes/student-portal'));
+} catch (err) {
+  console.log('⚠️ Student portal routes not loaded:', err.message);
+}
+
 // Root route
 app.get('/', (req, res) => {
   res.json({ 
@@ -122,7 +128,8 @@ app.get('/api/debug', (req, res) => {
       '/api/academics',
       '/api/administration',
       '/api/dashboard',
-      '/api/upload'
+      '/api/upload',
+      '/api/student-portal'
     ]
   });
 });
