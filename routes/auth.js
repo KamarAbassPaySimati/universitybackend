@@ -107,14 +107,11 @@ router.get('/me', authenticate, async (req, res) => {
 // Create default admin user
 router.post('/create-admin', async (req, res) => {
   try {
-    const adminExists = await User.findOne({ role: 'super-admin' });
-    
-    if (adminExists) {
-      return res.status(400).json({ error: 'Super admin already exists' });
-    }
+    // Delete existing admin if any
+    await User.deleteMany({ role: 'super-admin' });
 
     const admin = new User({
-      username: 'superadmin',
+      username: 'admin',
       email: 'admin@university.edu',
       password: 'admin123',
       role: 'super-admin',
@@ -130,7 +127,7 @@ router.post('/create-admin', async (req, res) => {
       success: true,
       message: 'Super admin created successfully',
       credentials: {
-        username: 'superadmin',
+        username: 'admin',
         password: 'admin123'
       }
     });
