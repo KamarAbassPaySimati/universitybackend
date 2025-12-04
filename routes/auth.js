@@ -126,16 +126,17 @@ router.get('/debug', async (req, res) => {
 // Get current user
 router.get('/me', authenticate, async (req, res) => {
   try {
+    const user = req.user;
     res.json({
       user: {
-        id: req.user._id,
-        username: req.user.username,
-        email: req.user.email,
-        role: req.user.role,
-        department: req.user.department,
-        organization: req.user.organization,
-        name: `${req.user.firstName} ${req.user.lastName}`,
-        permissions: req.user.permissions
+        id: user._id,
+        username: user.username,
+        email: user.email,
+        role: user.role,
+        department: user.department,
+        organization: user.organization,
+        name: user.firstName && user.lastName ? `${user.firstName} ${user.lastName}` : user.username,
+        permissions: user.permissions || []
       }
     });
   } catch (error) {
