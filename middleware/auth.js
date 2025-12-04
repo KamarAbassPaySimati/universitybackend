@@ -34,6 +34,22 @@ const authenticate = async (req, res, next) => {
       };
       return next();
     }
+    
+    // Handle fallback student token
+    if (decoded.userId === 'student-test-id') {
+      req.user = {
+        _id: 'student-test-id',
+        username: 'student',
+        email: 'student@university.edu',
+        role: 'student',
+        department: 'Computer Science',
+        organization: 'University System',
+        firstName: 'Demo',
+        lastName: 'Student',
+        isActive: true
+      };
+      return next();
+    }
 
     // Try to find user in database
     const user = await User.findById(decoded.userId).select('-password');

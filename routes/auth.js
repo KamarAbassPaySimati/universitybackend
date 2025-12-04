@@ -61,6 +61,25 @@ router.post('/login', async (req, res) => {
         token
       });
     }
+    
+    // Fallback: Create simple student user for testing
+    if (username === 'student' && password === 'student123') {
+      const token = generateToken('student-test-id');
+      
+      return res.json({
+        success: true,
+        user: {
+          id: 'student-test-id',
+          username: 'student',
+          email: 'student@university.edu',
+          role: 'student',
+          department: 'Computer Science',
+          organization: 'University System',
+          name: 'Demo Student'
+        },
+        token
+      });
+    }
 
     return res.status(401).json({ error: 'Invalid credentials' });
   } catch (error) {
@@ -169,6 +188,38 @@ router.post('/create-admin', async (req, res) => {
       credentials: {
         username: 'admin',
         password: 'admin123'
+      }
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Create default student user
+router.post('/create-student', async (req, res) => {
+  try {
+    // Delete existing student if any
+    await User.deleteMany({ username: 'student' });
+
+    const student = new User({
+      username: 'student',
+      email: 'student@university.edu',
+      password: 'student123',
+      role: 'student',
+      department: 'Computer Science',
+      organization: 'University System',
+      firstName: 'Demo',
+      lastName: 'Student'
+    });
+    
+    await student.save();
+    
+    res.json({
+      success: true,
+      message: 'Student user created successfully',
+      credentials: {
+        username: 'student',
+        password: 'student123'
       }
     });
   } catch (error) {
