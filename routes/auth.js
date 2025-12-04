@@ -84,6 +84,21 @@ router.post('/register', async (req, res) => {
   }
 });
 
+// Debug endpoint
+router.get('/debug', async (req, res) => {
+  try {
+    const userCount = await User.countDocuments();
+    const users = await User.find({}, 'username email role').limit(5);
+    res.json({
+      userCount,
+      users,
+      modelExists: !!User
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // Get current user
 router.get('/me', authenticate, async (req, res) => {
   try {
