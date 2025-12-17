@@ -8,6 +8,8 @@ router.post('/login', async (req, res) => {
   try {
     const { username, password } = req.body;
     
+    console.log('Login attempt for username:', username);
+    
     if (!username || !password) {
       return res.status(400).json({ error: 'Username and password required' });
     }
@@ -18,6 +20,8 @@ router.post('/login', async (req, res) => {
         $or: [{ username }, { email: username }],
         isActive: true 
       });
+      
+      console.log('Database user found:', user ? user.username : 'none');
       
       if (user && (await user.comparePassword(password))) {
         user.lastLogin = new Date();
@@ -40,7 +44,8 @@ router.post('/login', async (req, res) => {
         });
       }
     } catch (userModelError) {
-      console.log('User model not available, trying fallback');
+      console.log('User model error:', userModelError.message);
+      console.log('Trying fallback authentication...');
     }
 
     // Fallback: Create simple admin user for testing
@@ -64,6 +69,7 @@ router.post('/login', async (req, res) => {
     
     // Fallback: Create simple student user for testing
     if (username === 'student' && password === 'student123') {
+      console.log('Using fallback student authentication');
       const token = generateToken('student-test-id');
       
       return res.json({
@@ -80,6 +86,8 @@ router.post('/login', async (req, res) => {
         token
       });
     }
+    
+    console.log('Login failed - invalid credentials for:', username);
 
     return res.status(401).json({ error: 'Invalid credentials' });
   } catch (error) {
