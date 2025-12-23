@@ -87,6 +87,26 @@ router.post('/login', async (req, res) => {
       });
     }
     
+    // Fallback: Create simple lecturer user for testing
+    if (username === 'lecturer' && password === 'lecturer123') {
+      console.log('Using fallback lecturer authentication');
+      const token = generateToken('lecturer-test-id');
+      
+      return res.json({
+        success: true,
+        user: {
+          id: 'lecturer-test-id',
+          username: 'lecturer',
+          email: 'lecturer@university.edu',
+          role: 'faculty',
+          department: 'Computer Science',
+          organization: 'University System',
+          name: 'Demo Lecturer'
+        },
+        token
+      });
+    }
+    
     console.log('Login failed - invalid credentials for:', username);
 
     return res.status(401).json({ error: 'Invalid credentials' });
@@ -228,6 +248,38 @@ router.post('/create-student', async (req, res) => {
       credentials: {
         username: 'student',
         password: 'student123'
+      }
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Create default lecturer user
+router.post('/create-lecturer', async (req, res) => {
+  try {
+    // Delete existing lecturer if any
+    await User.deleteMany({ username: 'lecturer' });
+
+    const lecturer = new User({
+      username: 'lecturer',
+      email: 'lecturer@university.edu',
+      password: 'lecturer123',
+      role: 'faculty',
+      department: 'Computer Science',
+      organization: 'University System',
+      firstName: 'Demo',
+      lastName: 'Lecturer'
+    });
+    
+    await lecturer.save();
+    
+    res.json({
+      success: true,
+      message: 'Lecturer user created successfully',
+      credentials: {
+        username: 'lecturer',
+        password: 'lecturer123'
       }
     });
   } catch (error) {
